@@ -11,6 +11,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "execution/executors/seq_scan_executor.h"
+#include "concurrency/transaction_manager.h"
+#include "execution/execution_common.h"
 
 namespace bustub {
 
@@ -30,22 +32,39 @@ void SeqScanExecutor::Init() {
 
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   const auto &schema = table_info_->schema_;
+  auto *txn = exec_ctx_->GetTransaction();
+  auto *txn_mgr = exec_ctx_->GetTransactionManager();
+
   while (rid_iter_ != rids_.end()) {
     RID cur_rid = *rid_iter_;
     ++rid_iter_;
-    auto [meta, cur_tuple] = table_info_->table_->GetTuple(cur_rid);
-    // Skip tuples deleted by the storage layer.
-    if (meta.is_deleted_) {
-      continue;
+    auto [meta, base_tuple] = table_info_->table_->GetTuple(cur_rid);
+
+    Tuple visible_tuple = base_tuple;
+    // Under MVCC (a real transaction/txn manager present), reconstruct the
+    // version visible at this transaction's read timestamp.
+    if (txn != nullptr && txn_mgr != nullptr) {
+      std::vector<UndoLog> logs;
+      if (!CollectVisibleUndoLogs(txn_mgr, cur_rid, meta, txn->GetReadTs(), txn->GetTransactionTempTs(), &logs)) {
+        continue;  // no version visible to this reader
+      }
+      auto reconstructed = ReconstructTuple(&schema, base_tuple, meta, logs);
+      if (!reconstructed.has_value()) {
+        continue;  // tuple is deleted in the visible version
+      }
+      visible_tuple = *reconstructed;
+    } else if (meta.is_deleted_) {
+      continue;  // no MVCC context: honour the storage-level delete flag
     }
+
     // Apply the pushed-down filter predicate, if any.
     if (plan_->filter_predicate_ != nullptr) {
-      auto value = plan_->filter_predicate_->Evaluate(&cur_tuple, schema);
+      auto value = plan_->filter_predicate_->Evaluate(&visible_tuple, schema);
       if (value.IsNull() || !value.GetAs<bool>()) {
         continue;
       }
     }
-    *tuple = cur_tuple;
+    *tuple = visible_tuple;
     *rid = cur_rid;
     return true;
   }

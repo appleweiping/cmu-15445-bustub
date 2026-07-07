@@ -42,7 +42,8 @@ auto TransactionManager::Begin(IsolationLevel isolation_level) -> Transaction * 
   auto *txn_ref = txn.get();
   txn_map_.insert(std::make_pair(txn_id, std::move(txn)));
 
-  // TODO(fall2023): set the timestamps here. Watermark updated below.
+  // A new transaction reads the latest committed snapshot.
+  txn_ref->read_ts_ = last_commit_ts_.load();
 
   running_txns_.AddTxn(txn_ref->read_ts_);
   return txn_ref;
@@ -53,7 +54,8 @@ auto TransactionManager::VerifyTxn(Transaction *txn) -> bool { return true; }
 auto TransactionManager::Commit(Transaction *txn) -> bool {
   std::unique_lock<std::mutex> commit_lck(commit_mutex_);
 
-  // TODO(fall2023): acquire commit ts!
+  // The commit timestamp is one past the last committed transaction.
+  timestamp_t commit_ts = last_commit_ts_.load() + 1;
 
   if (txn->state_ != TransactionState::RUNNING) {
     throw Exception("txn not in running state");
@@ -67,13 +69,22 @@ auto TransactionManager::Commit(Transaction *txn) -> bool {
     }
   }
 
-  // TODO(fall2023): Implement the commit logic!
+  // Stamp every tuple this txn wrote with the final commit timestamp. During the
+  // txn these tuples carried the transaction's temporary timestamp (its txn id).
+  for (const auto &[table_oid, rids] : txn->GetWriteSets()) {
+    auto *table_info = catalog_->GetTable(table_oid);
+    for (const auto &rid : rids) {
+      auto meta = table_info->table_->GetTupleMeta(rid);
+      meta.ts_ = commit_ts;
+      table_info->table_->UpdateTupleMeta(meta, rid);
+    }
+  }
 
   std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
 
-  // TODO(fall2023): set commit timestamp + update last committed timestamp here.
-
+  txn->commit_ts_ = commit_ts;
   txn->state_ = TransactionState::COMMITTED;
+  last_commit_ts_.store(commit_ts);
   running_txns_.UpdateCommitTs(txn->commit_ts_);
   running_txns_.RemoveTxn(txn->read_ts_);
 

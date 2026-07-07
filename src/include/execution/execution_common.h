@@ -10,8 +10,22 @@
 
 namespace bustub {
 
+class TransactionManager;
+
 auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const TupleMeta &base_meta,
                       const std::vector<UndoLog> &undo_logs) -> std::optional<Tuple>;
+
+/**
+ * @brief Walk the version chain for `rid` and collect the undo logs needed to
+ * reconstruct the version visible to a reader at `read_ts` (a tuple written by
+ * the reader's own transaction, identified by `self_txn_id`, is also visible).
+ *
+ * @return true if a visible version exists (out_logs holds the logs to apply to
+ * the base tuple, possibly empty when the base itself is visible); false if no
+ * committed version is visible at read_ts.
+ */
+auto CollectVisibleUndoLogs(TransactionManager *txn_mgr, RID rid, const TupleMeta &base_meta, timestamp_t read_ts,
+                            txn_id_t self_txn_id, std::vector<UndoLog> *out_logs) -> bool;
 
 void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const TableInfo *table_info,
                TableHeap *table_heap);

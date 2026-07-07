@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <unordered_map>
 
 #include "concurrency/transaction.h"
@@ -35,6 +36,10 @@ class Watermark {
   timestamp_t watermark_;
 
   std::unordered_map<timestamp_t, int> current_reads_;
+
+  /** Ordered multiset of active read timestamps (ts -> refcount); begin() is the
+   * smallest live read ts, giving O(log N) watermark maintenance. */
+  std::map<timestamp_t, int> ordered_reads_;
 };
 
 };  // namespace bustub

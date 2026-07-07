@@ -69,5 +69,14 @@ class UpdateExecutor : public AbstractExecutor {
 
   /** Whether the row count has already been emitted. */
   bool done_{false};
+
+  /** Apply an in-place MVCC update (delete-old-values undo log + write new). */
+  void UpdateTupleInPlaceMVCC(RID rid, const TupleMeta &meta, const Tuple &old_tuple, const Tuple &new_tuple);
+  /** Delete a tuple (undo log + delete marker), keeping its RID. */
+  void DeleteTupleMVCC(RID rid, const TupleMeta &meta, const Tuple &old_tuple);
+  /** Insert a new tuple (reusing a deleted RID with the same key when possible). */
+  void InsertTupleMVCC(const Tuple &new_tuple);
+  /** @return true if any modified column belongs to a primary-key index. */
+  auto ModifiesPrimaryKey(const std::vector<uint32_t> &modified_cols) -> bool;
 };
 }  // namespace bustub

@@ -10,6 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 #include "execution/executors/index_scan_executor.h"
+#include "concurrency/transaction_manager.h"
+#include "execution/execution_common.h"
 #include "storage/index/extendible_hash_table_index.h"
 
 namespace bustub {
@@ -33,20 +35,38 @@ void IndexScanExecutor::Init() {
 }
 
 auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
+  const auto &schema = table_info_->schema_;
+  auto *txn = exec_ctx_->GetTransaction();
+  auto *txn_mgr = exec_ctx_->GetTransactionManager();
+
   while (rid_iter_ != result_rids_.end()) {
     RID cur_rid = *rid_iter_;
     ++rid_iter_;
-    auto [meta, cur_tuple] = table_info_->table_->GetTuple(cur_rid);
-    if (meta.is_deleted_) {
+    auto [meta, base_tuple] = table_info_->table_->GetTuple(cur_rid);
+
+    Tuple visible_tuple = base_tuple;
+    // Under MVCC, reconstruct the version visible at this txn's read timestamp.
+    if (txn != nullptr && txn_mgr != nullptr) {
+      std::vector<UndoLog> logs;
+      if (!CollectVisibleUndoLogs(txn_mgr, cur_rid, meta, txn->GetReadTs(), txn->GetTransactionTempTs(), &logs)) {
+        continue;
+      }
+      auto reconstructed = ReconstructTuple(&schema, base_tuple, meta, logs);
+      if (!reconstructed.has_value()) {
+        continue;  // deleted in the visible version
+      }
+      visible_tuple = *reconstructed;
+    } else if (meta.is_deleted_) {
       continue;
     }
+
     if (plan_->filter_predicate_ != nullptr) {
-      auto value = plan_->filter_predicate_->Evaluate(&cur_tuple, table_info_->schema_);
+      auto value = plan_->filter_predicate_->Evaluate(&visible_tuple, schema);
       if (value.IsNull() || !value.GetAs<bool>()) {
         continue;
       }
     }
-    *tuple = cur_tuple;
+    *tuple = visible_tuple;
     *rid = cur_rid;
     return true;
   }

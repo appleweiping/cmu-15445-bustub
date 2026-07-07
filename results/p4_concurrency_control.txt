@@ -1,0 +1,58 @@
+# CMU 15-445 Fall 2023 — Project 4 (Concurrency Control / MVCC) test results
+# Captured on Tue Jul  7 15:27:36 UTC 2026 — Ubuntu 24.04 WSL2, g++ 13, CMake Release
+# Public tests ship with a DISABLED_ prefix; run with --gtest_also_run_disabled_tests.
+
+======================= txn_timestamp_test =======================
+[ RUN      ] TxnTsTest.DISABLED_WatermarkPerformance
+[       OK ] TxnTsTest.DISABLED_WatermarkPerformance (1033 ms)
+[ RUN      ] TxnTsTest.DISABLED_TimestampTracking
+[       OK ] TxnTsTest.DISABLED_TimestampTracking (0 ms)
+[  PASSED  ] 2 tests.
+
+======================= txn_scan_test =======================
+[ RUN      ] TxnScanTest.DISABLED_TupleReconstructTest
+[       OK ] TxnScanTest.DISABLED_TupleReconstructTest (0 ms)
+[ RUN      ] TxnScanTest.DISABLED_ScanTest
+[       OK ] TxnScanTest.DISABLED_ScanTest (0 ms)
+[  PASSED  ] 2 tests.
+
+======================= txn_executor_test =======================
+[ RUN      ] TxnExecutorTest.DISABLED_InsertTest
+[       OK ] TxnExecutorTest.DISABLED_InsertTest (0 ms)
+[ RUN      ] TxnExecutorTest.DISABLED_InsertCommitTest
+[       OK ] TxnExecutorTest.DISABLED_InsertCommitTest (0 ms)
+[ RUN      ] TxnExecutorTest.DISABLED_InsertDeleteTest
+[       OK ] TxnExecutorTest.DISABLED_InsertDeleteTest (0 ms)
+[ RUN      ] TxnExecutorTest.DISABLED_InsertDeleteConflictTest
+[       OK ] TxnExecutorTest.DISABLED_InsertDeleteConflictTest (1 ms)
+[ RUN      ] TxnExecutorTest.DISABLED_UpdateTest1
+[       OK ] TxnExecutorTest.DISABLED_UpdateTest1 (0 ms)
+[ RUN      ] TxnExecutorTest.DISABLED_UpdateTest2
+[       OK ] TxnExecutorTest.DISABLED_UpdateTest2 (1 ms)
+[ RUN      ] TxnExecutorTest.DISABLED_UpdateTestWithUndoLog
+[       OK ] TxnExecutorTest.DISABLED_UpdateTestWithUndoLog (1 ms)
+[ RUN      ] TxnExecutorTest.DISABLED_UpdateConflict
+[       OK ] TxnExecutorTest.DISABLED_UpdateConflict (1 ms)
+[ RUN      ] TxnExecutorTest.DISABLED_GarbageCollection
+[       OK ] TxnExecutorTest.DISABLED_GarbageCollection (1 ms)
+[ RUN      ] TxnExecutorTest.DISABLED_GarbageCollectionWithTainted
+[       OK ] TxnExecutorTest.DISABLED_GarbageCollectionWithTainted (1 ms)
+[  PASSED  ] 10 tests.
+
+======================= txn_index_test =======================
+[ RUN      ] TxnIndexTest.DISABLED_IndexInsertTest
+[       OK ] TxnIndexTest.DISABLED_IndexInsertTest (1 ms)
+[ RUN      ] TxnIndexTest.DISABLED_InsertDeleteTest
+[       OK ] TxnIndexTest.DISABLED_InsertDeleteTest (0 ms)
+[ RUN      ] TxnIndexTest.DISABLED_UpdateTest
+[       OK ] TxnIndexTest.DISABLED_UpdateTest (1 ms)
+[ RUN      ] TxnIndexTest.DISABLED_UpdatePrimaryKeyTest
+[       OK ] TxnIndexTest.DISABLED_UpdatePrimaryKeyTest (0 ms)
+[ RUN      ] GradingTxnIndexTest.DISABLED_IndexUpdateConflictTest
+[       OK ] GradingTxnIndexTest.DISABLED_IndexUpdateConflictTest (0 ms)
+[  PASSED  ] 5 tests.
+
+======================= txn_index_concurrent_test (partial) =======================
+IndexConcurrentInsertTest: PASS
+IndexConcurrentUpdateTest: not passing (see README partials — concurrent
+  delete+reinsert stress requires additional in-page version-chain locking).

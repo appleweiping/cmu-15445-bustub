@@ -1,0 +1,80 @@
+# CMU 15-445 Fall 2023 — Project 0 (C++ Primer / Copy-On-Write Trie) test results
+# Captured on Tue Jul  7 11:28:29 UTC 2026 — Ubuntu 24.04 WSL2, g++ 13, CMake Release
+
+======================= trie_test =======================
+[==========] Running 14 tests from 1 test suite.
+[----------] 14 tests from TrieTest
+[ RUN      ] TrieTest.ConstructorTest
+[       OK ] TrieTest.ConstructorTest (0 ms)
+[ RUN      ] TrieTest.BasicPutTest
+[       OK ] TrieTest.BasicPutTest (0 ms)
+[ RUN      ] TrieTest.TrieStructureCheck
+[       OK ] TrieTest.TrieStructureCheck (0 ms)
+[ RUN      ] TrieTest.BasicPutGetTest
+[       OK ] TrieTest.BasicPutGetTest (0 ms)
+[ RUN      ] TrieTest.PutGetOnePath
+[       OK ] TrieTest.PutGetOnePath (0 ms)
+[ RUN      ] TrieTest.BasicRemoveTest1
+[       OK ] TrieTest.BasicRemoveTest1 (0 ms)
+[ RUN      ] TrieTest.BasicRemoveTest2
+[       OK ] TrieTest.BasicRemoveTest2 (0 ms)
+[ RUN      ] TrieTest.RemoveFreeTest
+[       OK ] TrieTest.RemoveFreeTest (0 ms)
+[ RUN      ] TrieTest.MismatchTypeTest
+[       OK ] TrieTest.MismatchTypeTest (0 ms)
+[ RUN      ] TrieTest.CopyOnWriteTest1
+[       OK ] TrieTest.CopyOnWriteTest1 (0 ms)
+[ RUN      ] TrieTest.CopyOnWriteTest2
+[       OK ] TrieTest.CopyOnWriteTest2 (0 ms)
+[ RUN      ] TrieTest.CopyOnWriteTest3
+[       OK ] TrieTest.CopyOnWriteTest3 (0 ms)
+[ RUN      ] TrieTest.MixedTest
+[       OK ] TrieTest.MixedTest (206 ms)
+[ RUN      ] TrieTest.PointerStability
+[       OK ] TrieTest.PointerStability (0 ms)
+[----------] 14 tests from TrieTest (207 ms total)
+[==========] 14 tests from 1 test suite ran. (207 ms total)
+[  PASSED  ] 14 tests.
+
+======================= trie_noncopy_test =======================
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from TrieTest
+[ RUN      ] TrieTest.NonCopyableTest
+[       OK ] TrieTest.NonCopyableTest (0 ms)
+[----------] 1 test from TrieTest (0 ms total)
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+
+======================= trie_store_test =======================
+[==========] Running 4 tests from 1 test suite.
+[----------] 4 tests from TrieStoreTest
+[ RUN      ] TrieStoreTest.BasicTest
+[       OK ] TrieStoreTest.BasicTest (0 ms)
+[ RUN      ] TrieStoreTest.GuardTest
+[       OK ] TrieStoreTest.GuardTest (0 ms)
+[ RUN      ] TrieStoreTest.MixedTest
+[       OK ] TrieStoreTest.MixedTest (330 ms)
+[ RUN      ] TrieStoreTest.MixedConcurrentTest
+[       OK ] TrieStoreTest.MixedConcurrentTest (5886 ms)
+[----------] 4 tests from TrieStoreTest (6217 ms total)
+[==========] 4 tests from 1 test suite ran. (6217 ms total)
+[  PASSED  ] 4 tests.
+
+======================= trie_store_noncopy_test =======================
+[==========] Running 2 tests from 1 test suite.
+[----------] 2 tests from TrieStoreTest
+[ RUN      ] TrieStoreTest.NonCopyableTest
+[       OK ] TrieStoreTest.NonCopyableTest (0 ms)
+[ RUN      ] TrieStoreTest.ReadWriteTest
+[       OK ] TrieStoreTest.ReadWriteTest (138 ms)
+[----------] 2 tests from TrieStoreTest (138 ms total)
+[==========] 2 tests from 1 test suite ran. (138 ms total)
+[  PASSED  ] 2 tests.
+
+======================= p0.01-lower-upper.slt =======================
+BufferPoolManager is not implemented, only mock tables are supported.
+<main>:1
+<main>:6
+<main>:11
+<main>:17
+sqllogictest exit code: 0

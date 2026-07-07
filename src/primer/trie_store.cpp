@@ -5,26 +5,52 @@ namespace bustub {
 
 template <class T>
 auto TrieStore::Get(std::string_view key) -> std::optional<ValueGuard<T>> {
-  // Pseudo-code:
-  // (1) Take the root lock, get the root, and release the root lock. Don't lookup the value in the
-  //     trie while holding the root lock.
-  // (2) Lookup the value in the trie.
-  // (3) If the value is found, return a ValueGuard object that holds a reference to the value and the
-  //     root. Otherwise, return std::nullopt.
-  throw NotImplementedException("TrieStore::Get is not implemented.");
+  // (1) Take a snapshot of the current root under the root lock, then release it
+  //     immediately so lookups never block other readers or the single writer.
+  Trie snapshot;
+  {
+    std::lock_guard<std::mutex> guard(root_lock_);
+    snapshot = root_;
+  }
+  // (2) Look up the value against the snapshot (no lock held).
+  const T *value = snapshot.Get<T>(key);
+  if (value == nullptr) {
+    return std::nullopt;
+  }
+  // (3) Return a ValueGuard that keeps the snapshot root alive so the reference
+  //     to the value stays valid even if the store is later mutated.
+  return std::make_optional<ValueGuard<T>>(snapshot, *value);
 }
 
 template <class T>
 void TrieStore::Put(std::string_view key, T value) {
-  // You will need to ensure there is only one writer at a time. Think of how you can achieve this.
-  // The logic should be somehow similar to `TrieStore::Get`.
-  throw NotImplementedException("TrieStore::Put is not implemented.");
+  // Only one writer at a time: hold write_lock_ for the whole read-modify-write.
+  std::lock_guard<std::mutex> write_guard(write_lock_);
+  Trie snapshot;
+  {
+    std::lock_guard<std::mutex> guard(root_lock_);
+    snapshot = root_;
+  }
+  // Build the new trie outside the root lock (COW, so this is cheap and safe).
+  Trie new_trie = snapshot.Put<T>(key, std::move(value));
+  {
+    std::lock_guard<std::mutex> guard(root_lock_);
+    root_ = std::move(new_trie);
+  }
 }
 
 void TrieStore::Remove(std::string_view key) {
-  // You will need to ensure there is only one writer at a time. Think of how you can achieve this.
-  // The logic should be somehow similar to `TrieStore::Get`.
-  throw NotImplementedException("TrieStore::Remove is not implemented.");
+  std::lock_guard<std::mutex> write_guard(write_lock_);
+  Trie snapshot;
+  {
+    std::lock_guard<std::mutex> guard(root_lock_);
+    snapshot = root_;
+  }
+  Trie new_trie = snapshot.Remove(key);
+  {
+    std::lock_guard<std::mutex> guard(root_lock_);
+    root_ = std::move(new_trie);
+  }
 }
 
 // Below are explicit instantiation of template functions.

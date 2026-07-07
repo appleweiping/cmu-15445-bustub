@@ -5,6 +5,7 @@
 
 #include "catalog/catalog.h"
 #include "catalog/schema.h"
+#include "common/config.h"
 #include "concurrency/transaction.h"
 #include "storage/table/tuple.h"
 
@@ -26,6 +27,22 @@ auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const Tuple
  */
 auto CollectVisibleUndoLogs(TransactionManager *txn_mgr, RID rid, const TupleMeta &base_meta, timestamp_t read_ts,
                             txn_id_t self_txn_id, std::vector<UndoLog> *out_logs) -> bool;
+
+/**
+ * @brief A write-write conflict exists when the tuple's latest version was
+ * written by another transaction that we cannot see: either it carries a
+ * temporary timestamp that is not ours (another uncommitted txn), or it was
+ * committed after our read timestamp.
+ */
+inline auto IsWriteWriteConflict(const TupleMeta &meta, timestamp_t read_ts, txn_id_t self_temp_ts) -> bool {
+  if (meta.ts_ == self_temp_ts) {
+    return false;  // we already own it
+  }
+  if (meta.ts_ >= TXN_START_ID) {
+    return true;  // held by another uncommitted transaction
+  }
+  return meta.ts_ > read_ts;  // committed after our snapshot
+}
 
 void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const TableInfo *table_info,
                TableHeap *table_heap);

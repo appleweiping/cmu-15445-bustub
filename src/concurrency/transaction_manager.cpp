@@ -103,6 +103,53 @@ void TransactionManager::Abort(Transaction *txn) {
   running_txns_.RemoveTxn(txn->read_ts_);
 }
 
-void TransactionManager::GarbageCollection() { UNIMPLEMENTED("not implemented"); }
+void TransactionManager::GarbageCollection() {
+  timestamp_t watermark = GetWatermark();
+
+  // A transaction survives GC if at least one of its undo logs is still needed
+  // to reconstruct a version visible to some reader at read_ts >= watermark.
+  std::unordered_set<txn_id_t> accessible;
+
+  auto table_names = catalog_->GetTableNames();
+  for (const auto &table_name : table_names) {
+    auto *table_info = catalog_->GetTable(table_name);
+    for (auto it = table_info->table_->MakeIterator(); !it.IsEnd(); ++it) {
+      RID rid = it.GetRID();
+      auto [meta, tuple] = it.GetTuple();
+
+      // Walk the version chain. Once we pass a version committed at or before the
+      // watermark, no reader needs any older undo log.
+      bool reached_watermark = meta.ts_ <= watermark;
+      auto link_opt = GetUndoLink(rid);
+      while (link_opt.has_value() && link_opt->IsValid()) {
+        if (reached_watermark) {
+          break;  // this and all older logs are unreachable
+        }
+        auto log_opt = GetUndoLogOptional(*link_opt);
+        if (!log_opt.has_value()) {
+          break;  // owner txn already gone
+        }
+        accessible.insert(link_opt->prev_txn_);
+        if (log_opt->ts_ <= watermark) {
+          reached_watermark = true;
+        }
+        link_opt = log_opt->prev_version_;
+      }
+    }
+  }
+
+  // Remove committed/aborted transactions with no accessible undo logs.
+  std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
+  for (auto it = txn_map_.begin(); it != txn_map_.end();) {
+    const auto &txn = it->second;
+    auto state = txn->GetTransactionState();
+    bool finished = state == TransactionState::COMMITTED || state == TransactionState::ABORTED;
+    if (finished && accessible.find(it->first) == accessible.end()) {
+      it = txn_map_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
 
 }  // namespace bustub

@@ -12,6 +12,7 @@
 
 #include <memory>
 
+#include "concurrency/transaction_manager.h"
 #include "execution/executors/insert_executor.h"
 
 namespace bustub {
@@ -34,22 +35,27 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   auto *catalog = exec_ctx_->GetCatalog();
   auto *table_info = catalog->GetTable(plan_->GetTableOid());
   auto indexes = catalog->GetTableIndexes(table_info->name_);
+  auto *txn = exec_ctx_->GetTransaction();
 
   int inserted = 0;
   Tuple child_tuple;
   RID child_rid;
   while (child_executor_->Next(&child_tuple, &child_rid)) {
-    // Insert into the table heap.
-    auto new_rid = table_info->table_->InsertTuple(TupleMeta{0, false}, child_tuple, exec_ctx_->GetLockManager(),
-                                                   exec_ctx_->GetTransaction(), plan_->GetTableOid());
+    // Insert with the transaction's temporary timestamp so only this txn sees it
+    // until commit. On commit the ts is rewritten to the commit timestamp.
+    auto new_rid = table_info->table_->InsertTuple(TupleMeta{txn->GetTransactionTempTs(), false}, child_tuple,
+                                                   exec_ctx_->GetLockManager(), txn, plan_->GetTableOid());
     if (!new_rid.has_value()) {
       continue;
     }
+    // Record the write so commit/abort can find this tuple.
+    txn->AppendWriteSet(plan_->GetTableOid(), *new_rid);
+
     // Mirror the insert into every index on the table.
     for (auto *index_info : indexes) {
       auto key = child_tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_,
                                           index_info->index_->GetKeyAttrs());
-      index_info->index_->InsertEntry(key, *new_rid, exec_ctx_->GetTransaction());
+      index_info->index_->InsertEntry(key, *new_rid, txn);
     }
     inserted++;
   }

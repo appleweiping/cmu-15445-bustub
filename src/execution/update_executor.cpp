@@ -11,6 +11,8 @@
 //===----------------------------------------------------------------------===//
 #include <memory>
 
+#include "concurrency/transaction_manager.h"
+#include "execution/execution_common.h"
 #include "execution/executors/update_executor.h"
 
 namespace bustub {
@@ -32,39 +34,108 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   }
   done_ = true;
 
-  auto *catalog = exec_ctx_->GetCatalog();
-  auto indexes = catalog->GetTableIndexes(table_info_->name_);
+  auto *txn = exec_ctx_->GetTransaction();
+  auto *txn_mgr = exec_ctx_->GetTransactionManager();
   const auto &schema = table_info_->schema_;
+  uint32_t col_count = schema.GetColumnCount();
 
   int updated = 0;
   Tuple child_tuple;
   RID child_rid;
   while (child_executor_->Next(&child_tuple, &child_rid)) {
-    // Model an update as delete-old + insert-new (the P3 storage model).
-    table_info_->table_->UpdateTupleMeta(TupleMeta{0, true}, child_rid);
-    for (auto *index_info : indexes) {
-      auto old_key =
-          child_tuple.KeyFromTuple(schema, index_info->key_schema_, index_info->index_->GetKeyAttrs());
-      index_info->index_->DeleteEntry(old_key, child_rid, exec_ctx_->GetTransaction());
+    auto [meta, old_tuple] = table_info_->table_->GetTuple(child_rid);
+
+    // Write-write conflict detection.
+    if (IsWriteWriteConflict(meta, txn->GetReadTs(), txn->GetTransactionTempTs())) {
+      txn->SetTainted();
+      throw ExecutionException("write-write conflict on update");
     }
 
-    // Compute the new tuple from the target expressions.
+    // Compute the new tuple in place (Fall 2023 non-primary-key updates keep RID).
     std::vector<Value> new_values;
     new_values.reserve(plan_->target_expressions_.size());
     for (const auto &expr : plan_->target_expressions_) {
-      new_values.push_back(expr->Evaluate(&child_tuple, schema));
+      new_values.push_back(expr->Evaluate(&old_tuple, schema));
     }
     Tuple new_tuple(new_values, &schema);
 
-    auto new_rid = table_info_->table_->InsertTuple(TupleMeta{0, false}, new_tuple, exec_ctx_->GetLockManager(),
-                                                    exec_ctx_->GetTransaction(), plan_->GetTableOid());
-    if (new_rid.has_value()) {
-      for (auto *index_info : indexes) {
-        auto new_key =
-            new_tuple.KeyFromTuple(schema, index_info->key_schema_, index_info->index_->GetKeyAttrs());
-        index_info->index_->InsertEntry(new_key, *new_rid, exec_ctx_->GetTransaction());
+    // Determine which columns actually changed (for the diff undo log).
+    std::vector<bool> modified(col_count, false);
+    std::vector<uint32_t> modified_cols;
+    for (uint32_t i = 0; i < col_count; i++) {
+      Value ov = old_tuple.GetValue(&schema, i);
+      Value nv = new_tuple.GetValue(&schema, i);
+      if (ov.CompareExactlyEquals(nv)) {
+        continue;
+      }
+      modified[i] = true;
+      modified_cols.push_back(i);
+    }
+
+    if (meta.ts_ != txn->GetTransactionTempTs()) {
+      // First write by this txn: create a diff undo log holding the OLD values of
+      // the changed columns, then link it into the version chain.
+      Schema partial_schema = Schema::CopySchema(&schema, modified_cols);
+      std::vector<Value> old_partial;
+      old_partial.reserve(modified_cols.size());
+      for (auto c : modified_cols) {
+        old_partial.push_back(old_tuple.GetValue(&schema, c));
+      }
+      Tuple partial_tuple(old_partial, &partial_schema);
+      UndoLog undo_log{false, modified, partial_tuple, meta.ts_,
+                       txn_mgr->GetUndoLink(child_rid).value_or(UndoLink{})};
+      UndoLink new_link = txn->AppendUndoLog(undo_log);
+      txn_mgr->UpdateUndoLink(child_rid, new_link);
+      txn->AppendWriteSet(plan_->GetTableOid(), child_rid);
+    } else {
+      // Self-update: merge new modifications into the existing head undo log so a
+      // single log per RID captures the full pre-txn version.
+      auto head_link_opt = txn_mgr->GetUndoLink(child_rid);
+      if (head_link_opt.has_value() && head_link_opt->IsValid() &&
+          head_link_opt->prev_txn_ == txn->GetTransactionId()) {
+        UndoLog head = txn->GetUndoLog(head_link_opt->prev_log_idx_);
+        // Reconstruct the full set of "old" values the head currently records.
+        std::vector<uint32_t> head_cols;
+        for (uint32_t i = 0; i < head.modified_fields_.size(); i++) {
+          if (head.modified_fields_[i]) {
+            head_cols.push_back(i);
+          }
+        }
+        Schema head_schema = Schema::CopySchema(&schema, head_cols);
+        std::vector<Value> merged_old(col_count);
+        std::vector<bool> merged_fields(col_count, false);
+        uint32_t hi = 0;
+        for (uint32_t i = 0; i < col_count; i++) {
+          if (head.modified_fields_[i]) {
+            merged_old[i] = head.tuple_.GetValue(&head_schema, hi++);
+            merged_fields[i] = true;
+          }
+        }
+        // Add columns changed for the first time in this update (capture the
+        // value they had *before* this update, i.e. old_tuple's value).
+        for (auto c : modified_cols) {
+          if (!merged_fields[c]) {
+            merged_old[c] = old_tuple.GetValue(&schema, c);
+            merged_fields[c] = true;
+          }
+        }
+        std::vector<uint32_t> merged_cols;
+        std::vector<Value> merged_partial;
+        for (uint32_t i = 0; i < col_count; i++) {
+          if (merged_fields[i]) {
+            merged_cols.push_back(i);
+            merged_partial.push_back(merged_old[i]);
+          }
+        }
+        Schema merged_schema = Schema::CopySchema(&schema, merged_cols);
+        Tuple merged_tuple(merged_partial, &merged_schema);
+        UndoLog new_head{head.is_deleted_, merged_fields, merged_tuple, head.ts_, head.prev_version_};
+        txn->ModifyUndoLog(head_link_opt->prev_log_idx_, new_head);
       }
     }
+
+    // Apply the update in place with our temporary timestamp.
+    table_info_->table_->UpdateTupleInPlace(TupleMeta{txn->GetTransactionTempTs(), false}, new_tuple, child_rid);
     updated++;
   }
 

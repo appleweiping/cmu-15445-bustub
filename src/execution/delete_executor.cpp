@@ -12,6 +12,8 @@
 
 #include <memory>
 
+#include "concurrency/transaction_manager.h"
+#include "execution/execution_common.h"
 #include "execution/executors/delete_executor.h"
 
 namespace bustub {
@@ -33,20 +35,37 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
   auto *catalog = exec_ctx_->GetCatalog();
   auto *table_info = catalog->GetTable(plan_->GetTableOid());
-  auto indexes = catalog->GetTableIndexes(table_info->name_);
+  auto *txn = exec_ctx_->GetTransaction();
+  auto *txn_mgr = exec_ctx_->GetTransactionManager();
+  const auto &schema = table_info->schema_;
 
   int deleted = 0;
   Tuple child_tuple;
   RID child_rid;
   while (child_executor_->Next(&child_tuple, &child_rid)) {
-    // Tombstone the tuple by marking its meta as deleted.
-    table_info->table_->UpdateTupleMeta(TupleMeta{0, true}, child_rid);
-    // Remove the corresponding index entries.
-    for (auto *index_info : indexes) {
-      auto key = child_tuple.KeyFromTuple(table_info->schema_, index_info->key_schema_,
-                                          index_info->index_->GetKeyAttrs());
-      index_info->index_->DeleteEntry(key, child_rid, exec_ctx_->GetTransaction());
+    auto [meta, base_tuple] = table_info->table_->GetTuple(child_rid);
+
+    // Write-write conflict: another (uncommitted or newer-committed) txn owns
+    // this tuple. Taint ourselves and abort.
+    if (IsWriteWriteConflict(meta, txn->GetReadTs(), txn->GetTransactionTempTs())) {
+      txn->SetTainted();
+      throw ExecutionException("write-write conflict on delete");
     }
+
+    if (meta.ts_ != txn->GetTransactionTempTs()) {
+      // First modification by this txn: push an undo log capturing the full old
+      // tuple (all columns), then link it into the version chain.
+      std::vector<bool> modified(schema.GetColumnCount(), true);
+      UndoLog undo_log{false, modified, base_tuple, meta.ts_, txn_mgr->GetUndoLink(child_rid).value_or(UndoLink{})};
+      UndoLink new_link = txn->AppendUndoLog(undo_log);
+      txn_mgr->UpdateUndoLink(child_rid, new_link);
+      txn->AppendWriteSet(plan_->GetTableOid(), child_rid);
+    }
+    // If we already own the tuple, we just flip it to a delete marker; any
+    // existing undo log already captures the pre-txn version.
+
+    // Mark the base tuple as deleted with our temporary timestamp.
+    table_info->table_->UpdateTupleMeta(TupleMeta{txn->GetTransactionTempTs(), true}, child_rid);
     deleted++;
   }
 

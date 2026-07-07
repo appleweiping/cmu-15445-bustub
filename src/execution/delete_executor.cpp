@@ -54,11 +54,18 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
     if (meta.ts_ != txn->GetTransactionTempTs()) {
       // First modification by this txn: push an undo log capturing the full old
-      // tuple (all columns), then link it into the version chain.
+      // tuple (all columns), then atomically link it into the version chain (CAS).
       std::vector<bool> modified(schema.GetColumnCount(), true);
-      UndoLog undo_log{false, modified, base_tuple, meta.ts_, txn_mgr->GetUndoLink(child_rid).value_or(UndoLink{})};
+      auto prev_link = txn_mgr->GetUndoLink(child_rid).value_or(UndoLink{});
+      UndoLog undo_log{false, modified, base_tuple, meta.ts_, prev_link};
       UndoLink new_link = txn->AppendUndoLog(undo_log);
-      txn_mgr->UpdateUndoLink(child_rid, new_link);
+      bool ok = txn_mgr->UpdateUndoLink(child_rid, new_link, [prev_link](std::optional<UndoLink> cur) -> bool {
+        return !cur.has_value() || *cur == prev_link;
+      });
+      if (!ok) {
+        txn->SetTainted();
+        throw ExecutionException("write-write conflict (concurrent delete)");
+      }
       txn->AppendWriteSet(plan_->GetTableOid(), child_rid);
     }
     // If we already own the tuple, we just flip it to a delete marker; any

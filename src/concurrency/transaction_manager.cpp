@@ -96,7 +96,35 @@ void TransactionManager::Abort(Transaction *txn) {
     throw Exception("txn not in running / tainted state");
   }
 
-  // TODO(fall2023): Implement the abort logic!
+  // Roll back every tuple this txn modified to its pre-txn version, using the
+  // txn's own head undo log (which captures the state before this txn touched it).
+  for (const auto &[table_oid, rids] : txn->GetWriteSets()) {
+    auto *table_info = catalog_->GetTable(table_oid);
+    for (const auto &rid : rids) {
+      auto meta = table_info->table_->GetTupleMeta(rid);
+      // Only revert tuples still stamped with our temporary timestamp.
+      if (meta.ts_ != txn->GetTransactionTempTs()) {
+        continue;
+      }
+      auto link_opt = GetUndoLink(rid);
+      if (link_opt.has_value() && link_opt->IsValid() && link_opt->prev_txn_ == txn->GetTransactionId()) {
+        UndoLog head = txn->GetUndoLog(link_opt->prev_log_idx_);
+        auto [cur_meta, cur_tuple] = table_info->table_->GetTuple(rid);
+        auto restored = ReconstructTuple(&table_info->schema_, cur_tuple, cur_meta, {head});
+        if (restored.has_value()) {
+          table_info->table_->UpdateTupleInPlace(TupleMeta{head.ts_, false}, *restored, rid);
+        } else {
+          // The pre-txn version was itself a delete: restore the delete marker.
+          table_info->table_->UpdateTupleMeta(TupleMeta{head.ts_, true}, rid);
+        }
+        // Unlink our undo log from the version chain.
+        UpdateUndoLink(rid, head.prev_version_);
+      } else {
+        // No undo log: this tuple was freshly inserted by us -> mark deleted.
+        table_info->table_->UpdateTupleMeta(TupleMeta{0, true}, rid);
+      }
+    }
+  }
 
   std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
   txn->state_ = TransactionState::ABORTED;

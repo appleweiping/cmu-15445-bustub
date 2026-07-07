@@ -70,9 +70,18 @@ void UpdateExecutor::UpdateTupleInPlaceMVCC(RID rid, const TupleMeta &meta, cons
       old_partial.push_back(old_tuple.GetValue(&schema, c));
     }
     Tuple partial_tuple(old_partial, &partial_schema);
-    UndoLog undo_log{false, modified, partial_tuple, meta.ts_, txn_mgr->GetUndoLink(rid).value_or(UndoLink{})};
+    auto prev_link = txn_mgr->GetUndoLink(rid).value_or(UndoLink{});
+    UndoLog undo_log{false, modified, partial_tuple, meta.ts_, prev_link};
     UndoLink new_link = txn->AppendUndoLog(undo_log);
-    txn_mgr->UpdateUndoLink(rid, new_link);
+    // Atomically install our version only if no other writer beat us (CAS on the
+    // version link). A failed CAS means a concurrent write-write conflict.
+    bool ok = txn_mgr->UpdateUndoLink(rid, new_link, [prev_link](std::optional<UndoLink> cur) -> bool {
+      return !cur.has_value() || *cur == prev_link;
+    });
+    if (!ok) {
+      txn->SetTainted();
+      throw ExecutionException("write-write conflict (concurrent update)");
+    }
     txn->AppendWriteSet(plan_->GetTableOid(), rid);
   } else {
     // Self-update: merge into the existing (non-delete) head undo log.
@@ -129,9 +138,16 @@ void UpdateExecutor::DeleteTupleMVCC(RID rid, const TupleMeta &meta, const Tuple
 
   if (meta.ts_ != txn->GetTransactionTempTs()) {
     std::vector<bool> modified(col_count, true);
-    UndoLog undo_log{false, modified, old_tuple, meta.ts_, txn_mgr->GetUndoLink(rid).value_or(UndoLink{})};
+    auto prev_link = txn_mgr->GetUndoLink(rid).value_or(UndoLink{});
+    UndoLog undo_log{false, modified, old_tuple, meta.ts_, prev_link};
     UndoLink new_link = txn->AppendUndoLog(undo_log);
-    txn_mgr->UpdateUndoLink(rid, new_link);
+    bool ok = txn_mgr->UpdateUndoLink(rid, new_link, [prev_link](std::optional<UndoLink> cur) -> bool {
+      return !cur.has_value() || *cur == prev_link;
+    });
+    if (!ok) {
+      txn->SetTainted();
+      throw ExecutionException("write-write conflict (concurrent delete)");
+    }
     txn->AppendWriteSet(plan_->GetTableOid(), rid);
   }
   table_info_->table_->UpdateTupleMeta(TupleMeta{txn->GetTransactionTempTs(), true}, rid);

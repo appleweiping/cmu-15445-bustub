@@ -13,6 +13,7 @@
 #pragma once
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "execution/executor_context.h"
@@ -52,5 +53,37 @@ class SortExecutor : public AbstractExecutor {
  private:
   /** The sort plan node to be executed */
   const SortPlanNode *plan_;
+  /** Child executor supplying the tuples to sort. */
+  std::unique_ptr<AbstractExecutor> child_executor_;
+  /** Fully sorted tuples produced at Init time. */
+  std::vector<Tuple> sorted_tuples_;
+  /** Cursor into `sorted_tuples_`. */
+  size_t cursor_{0};
+};
+
+/**
+ * Strict-weak ordering over tuples for a list of (OrderByType, expr) keys.
+ * Returns true if `a` should come before `b`. Shared by Sort and TopN.
+ */
+struct TupleComparator {
+  const std::vector<std::pair<OrderByType, AbstractExpressionRef>> *order_bys_;
+  const Schema *schema_;
+
+  auto operator()(const Tuple &a, const Tuple &b) const -> bool {
+    for (const auto &[type, expr] : *order_bys_) {
+      Value va = expr->Evaluate(&a, *schema_);
+      Value vb = expr->Evaluate(&b, *schema_);
+      if (va.CompareEquals(vb) == CmpBool::CmpTrue) {
+        continue;
+      }
+      bool less = va.CompareLessThan(vb) == CmpBool::CmpTrue;
+      if (type == OrderByType::DESC) {
+        return !less;
+      }
+      // DEFAULT / ASC / INVALID all treated as ascending.
+      return less;
+    }
+    return false;
+  }
 };
 }  // namespace bustub

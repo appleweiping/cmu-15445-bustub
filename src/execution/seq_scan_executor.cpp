@@ -14,10 +14,42 @@
 
 namespace bustub {
 
-SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan) : AbstractExecutor(exec_ctx) {}
+SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan)
+    : AbstractExecutor(exec_ctx), plan_(plan) {}
 
-void SeqScanExecutor::Init() { throw NotImplementedException("SeqScanExecutor is not implemented"); }
+void SeqScanExecutor::Init() {
+  auto *table_info = exec_ctx_->GetCatalog()->GetTable(plan_->GetTableOid());
+  // Snapshot all RIDs up front so iteration is stable across the scan.
+  rids_.clear();
+  for (auto it = table_info->table_->MakeIterator(); !it.IsEnd(); ++it) {
+    rids_.push_back(it.GetRID());
+  }
+  rid_iter_ = rids_.begin();
+  table_info_ = table_info;
+}
 
-auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool { return false; }
+auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
+  const auto &schema = table_info_->schema_;
+  while (rid_iter_ != rids_.end()) {
+    RID cur_rid = *rid_iter_;
+    ++rid_iter_;
+    auto [meta, cur_tuple] = table_info_->table_->GetTuple(cur_rid);
+    // Skip tuples deleted by the storage layer.
+    if (meta.is_deleted_) {
+      continue;
+    }
+    // Apply the pushed-down filter predicate, if any.
+    if (plan_->filter_predicate_ != nullptr) {
+      auto value = plan_->filter_predicate_->Evaluate(&cur_tuple, schema);
+      if (value.IsNull() || !value.GetAs<bool>()) {
+        continue;
+      }
+    }
+    *tuple = cur_tuple;
+    *rid = cur_rid;
+    return true;
+  }
+  return false;
+}
 
 }  // namespace bustub

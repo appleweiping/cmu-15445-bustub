@@ -53,8 +53,24 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
 
  private:
+  /** Build one joined output tuple from a left and right tuple. */
+  auto MakeJoinTuple(const Tuple *left_tuple, const Tuple *right_tuple) -> Tuple;
+  /** Build a joined output tuple with NULLs on the right (left-outer no-match). */
+  auto MakeLeftJoinTuple(const Tuple *left_tuple) -> Tuple;
+
   /** The NestedLoopJoin plan node to be executed. */
   const NestedLoopJoinPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> left_executor_;
+  std::unique_ptr<AbstractExecutor> right_executor_;
+  /** All right-side tuples, materialised once. */
+  std::vector<Tuple> right_tuples_;
+  /** Current left tuple and whether it is valid. */
+  Tuple left_tuple_;
+  bool left_valid_{false};
+  /** Cursor into right_tuples_ for the current left tuple. */
+  size_t right_idx_{0};
+  /** Whether the current left tuple has matched any right tuple (for left join). */
+  bool left_matched_{false};
 };
 
 }  // namespace bustub

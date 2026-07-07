@@ -72,12 +72,33 @@ class SimpleAggregationHashTable {
    */
   void CombineAggregateValues(AggregateValue *result, const AggregateValue &input) {
     for (uint32_t i = 0; i < agg_exprs_.size(); i++) {
+      Value &acc = result->aggregates_[i];
+      const Value &in = input.aggregates_[i];
       switch (agg_types_[i]) {
         case AggregationType::CountStarAggregate:
+          // count(*) counts every row regardless of nullness.
+          acc = acc.Add(ValueFactory::GetIntegerValue(1));
+          break;
         case AggregationType::CountAggregate:
+          // count(col) ignores NULLs; first non-null starts the count at 1.
+          if (!in.IsNull()) {
+            acc = acc.IsNull() ? ValueFactory::GetIntegerValue(1) : acc.Add(ValueFactory::GetIntegerValue(1));
+          }
+          break;
         case AggregationType::SumAggregate:
+          if (!in.IsNull()) {
+            acc = acc.IsNull() ? in : acc.Add(in);
+          }
+          break;
         case AggregationType::MinAggregate:
+          if (!in.IsNull()) {
+            acc = acc.IsNull() ? in : acc.Min(in);
+          }
+          break;
         case AggregationType::MaxAggregate:
+          if (!in.IsNull()) {
+            acc = acc.IsNull() ? in : acc.Max(in);
+          }
           break;
       }
     }
@@ -203,9 +224,12 @@ class AggregationExecutor : public AbstractExecutor {
   std::unique_ptr<AbstractExecutor> child_executor_;
 
   /** Simple aggregation hash table */
-  // TODO(Student): Uncomment SimpleAggregationHashTable aht_;
+  SimpleAggregationHashTable aht_;
 
   /** Simple aggregation hash table iterator */
-  // TODO(Student): Uncomment SimpleAggregationHashTable::Iterator aht_iterator_;
+  SimpleAggregationHashTable::Iterator aht_iterator_;
+
+  /** Whether an empty child (no group-bys) has already emitted its default row. */
+  bool empty_emitted_{false};
 };
 }  // namespace bustub

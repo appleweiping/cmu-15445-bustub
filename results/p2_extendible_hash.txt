@@ -1,0 +1,56 @@
+# CMU 15-445 Fall 2023 — Project 2 (Extendible Hash Index) test results
+# Captured on Tue Jul  7 12:28:31 UTC 2026 — Ubuntu 24.04 WSL2, g++ 13, CMake Release
+# Public tests ship with a DISABLED_ prefix; run with --gtest_also_run_disabled_tests.
+
+======================= page_guard_test =======================
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from PageGuardTest
+[ RUN      ] PageGuardTest.DISABLED_SampleTest
+[       OK ] PageGuardTest.DISABLED_SampleTest (0 ms)
+[----------] 1 test from PageGuardTest (0 ms total)
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+
+======================= extendible_htable_page_test =======================
+[==========] Running 2 tests from 1 test suite.
+[----------] 2 tests from ExtendibleHTableTest
+[ RUN      ] ExtendibleHTableTest.DISABLED_BucketPageSampleTest
+[       OK ] ExtendibleHTableTest.DISABLED_BucketPageSampleTest (0 ms)
+[ RUN      ] ExtendibleHTableTest.DISABLED_HeaderDirectoryPageSampleTest
+[       OK ] ExtendibleHTableTest.DISABLED_HeaderDirectoryPageSampleTest (0 ms)
+[----------] 2 tests from ExtendibleHTableTest (1 ms total)
+[==========] 2 tests from 1 test suite ran. (1 ms total)
+[  PASSED  ] 2 tests.
+
+======================= extendible_htable_test =======================
+[==========] Running 3 tests from 1 test suite.
+[----------] 3 tests from ExtendibleHTableTest
+[ RUN      ] ExtendibleHTableTest.DISABLED_InsertTest1
+[       OK ] ExtendibleHTableTest.DISABLED_InsertTest1 (0 ms)
+[ RUN      ] ExtendibleHTableTest.DISABLED_InsertTest2
+[       OK ] ExtendibleHTableTest.DISABLED_InsertTest2 (0 ms)
+[ RUN      ] ExtendibleHTableTest.DISABLED_RemoveTest1
+[       OK ] ExtendibleHTableTest.DISABLED_RemoveTest1 (0 ms)
+[----------] 3 tests from ExtendibleHTableTest (1 ms total)
+[==========] 3 tests from 1 test suite ran. (1 ms total)
+[  PASSED  ] 3 tests.
+
+======================= extendible_htable_concurrent_test =======================
+[==========] Running 6 tests from 1 test suite.
+[----------] 6 tests from ExtendibleHTableConcurrentTest
+[ RUN      ] ExtendibleHTableConcurrentTest.DISABLED_InsertTest1
+[       OK ] ExtendibleHTableConcurrentTest.DISABLED_InsertTest1 (90 ms)
+[ RUN      ] ExtendibleHTableConcurrentTest.DISABLED_InsertTest2
+[       OK ] ExtendibleHTableConcurrentTest.DISABLED_InsertTest2 (56 ms)
+[ RUN      ] ExtendibleHTableConcurrentTest.DISABLED_DeleteTest1
+[       OK ] ExtendibleHTableConcurrentTest.DISABLED_DeleteTest1 (0 ms)
+[ RUN      ] ExtendibleHTableConcurrentTest.DISABLED_DeleteTest2
+[       OK ] ExtendibleHTableConcurrentTest.DISABLED_DeleteTest2 (0 ms)
+[ RUN      ] ExtendibleHTableConcurrentTest.DISABLED_MixTest1
+[       OK ] ExtendibleHTableConcurrentTest.DISABLED_MixTest1 (0 ms)
+[ RUN      ] ExtendibleHTableConcurrentTest.DISABLED_MixTest2
+[       OK ] ExtendibleHTableConcurrentTest.DISABLED_MixTest2 (59 ms)
+[----------] 6 tests from ExtendibleHTableConcurrentTest (208 ms total)
+[==========] 6 tests from 1 test suite ran. (208 ms total)
+[  PASSED  ] 6 tests.
+

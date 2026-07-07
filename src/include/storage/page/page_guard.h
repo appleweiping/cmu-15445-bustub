@@ -167,6 +167,7 @@ class ReadPageGuard {
   }
 
  private:
+  friend class BasicPageGuard;
   // You may choose to get rid of this and add your own private variables.
   BasicPageGuard guard_;
 };
@@ -234,6 +235,7 @@ class WritePageGuard {
   }
 
  private:
+  friend class BasicPageGuard;
   // You may choose to get rid of this and add your own private variables.
   BasicPageGuard guard_;
 };

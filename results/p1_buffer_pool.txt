@@ -1,0 +1,33 @@
+# CMU 15-445 Fall 2023 — Project 1 (Buffer Pool Manager) test results
+# Captured on Tue Jul  7 11:55:45 UTC 2026 — Ubuntu 24.04 WSL2, g++ 13, CMake Release
+# Public tests ship with a DISABLED_ prefix; run with --gtest_also_run_disabled_tests.
+
+======================= lru_k_replacer_test =======================
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from LRUKReplacerTest
+[ RUN      ] LRUKReplacerTest.DISABLED_SampleTest
+[       OK ] LRUKReplacerTest.DISABLED_SampleTest (0 ms)
+[----------] 1 test from LRUKReplacerTest (0 ms total)
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+
+======================= disk_scheduler_test =======================
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from DiskSchedulerTest
+[ RUN      ] DiskSchedulerTest.DISABLED_ScheduleWriteReadPageTest
+[       OK ] DiskSchedulerTest.DISABLED_ScheduleWriteReadPageTest (0 ms)
+[----------] 1 test from DiskSchedulerTest (0 ms total)
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+
+======================= buffer_pool_manager_test =======================
+[==========] Running 2 tests from 1 test suite.
+[----------] 2 tests from BufferPoolManagerTest
+[ RUN      ] BufferPoolManagerTest.DISABLED_BinaryDataTest
+[       OK ] BufferPoolManagerTest.DISABLED_BinaryDataTest (2 ms)
+[ RUN      ] BufferPoolManagerTest.DISABLED_SampleTest
+[       OK ] BufferPoolManagerTest.DISABLED_SampleTest (2 ms)
+[----------] 2 tests from BufferPoolManagerTest (5 ms total)
+[==========] 2 tests from 1 test suite ran. (5 ms total)
+[  PASSED  ] 2 tests.
+

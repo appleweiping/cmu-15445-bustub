@@ -207,6 +207,17 @@ class BufferPoolManager {
     // This is a no-nop right now without a more complex data structure to track deallocated pages
   }
 
-  // TODO(student): You may add additional private members and helper functions
+  /**
+   * @brief Obtain a usable frame: prefer the free list, else evict from the replacer
+   * (flushing a dirty victim and dropping its page-table entry). Latch must be held.
+   * @return true and set *out_frame_id on success; false if no frame is available.
+   */
+  auto GetAvailableFrame(frame_id_t *out_frame_id) -> bool;
+
+  /**
+   * @brief Synchronously write the page in the given frame back to disk and clear
+   * its dirty flag. Latch must be held.
+   */
+  void FlushFrame(frame_id_t frame_id);
 };
 }  // namespace bustub

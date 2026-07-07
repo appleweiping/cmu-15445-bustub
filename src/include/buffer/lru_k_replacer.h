@@ -26,14 +26,38 @@ namespace bustub {
 enum class AccessType { Unknown = 0, Lookup, Scan, Index };
 
 class LRUKNode {
+ public:
+  LRUKNode() = default;
+  LRUKNode(frame_id_t fid, size_t k) : k_(k), fid_(fid) {}
+
+  /** Record an access at `ts`, keeping at most k timestamps (most recent at back). */
+  void RecordAccess(size_t ts) {
+    history_.push_back(ts);
+    if (history_.size() > k_) {
+      history_.pop_front();
+    }
+  }
+
+  /** Backward k-distance: +inf (max) when fewer than k accesses; otherwise now - kth-recent. */
+  auto BackwardKDistance(size_t now) const -> size_t {
+    if (history_.size() < k_) {
+      return std::numeric_limits<size_t>::max();
+    }
+    return now - history_.front();
+  }
+
+  /** Timestamp of the earliest recorded access (used as the LRU tiebreaker). */
+  auto EarliestTimestamp() const -> size_t { return history_.front(); }
+
+  auto IsEvictable() const -> bool { return is_evictable_; }
+  void SetEvictable(bool evictable) { is_evictable_ = evictable; }
+
  private:
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
-  // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
-
-  [[maybe_unused]] std::list<size_t> history_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] frame_id_t fid_;
-  [[maybe_unused]] bool is_evictable_{false};
+  std::list<size_t> history_;
+  size_t k_{0};
+  [[maybe_unused]] frame_id_t fid_{0};
+  bool is_evictable_{false};
 };
 
 /**
